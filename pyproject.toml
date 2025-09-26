@@ -1,0 +1,22 @@
+[project]
+name = "audiblastodon"
+version = "0.1.0"
+description = "A bot to find and post free Audible titles to Mastodon."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+
+dependencies = [
+    "requests",
+    "beautifulsoup4",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-mock",
+]
+
+[project.scripts]
+main = "audiblastodon.main:cli"

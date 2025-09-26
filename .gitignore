@@ -1,0 +1,8 @@
+.env
+audiblastodon.egg-info/
+books.csv
+live_audible_page.html
+posted_books.txt
+uv.lock
+__pycache__/
+.venv/
