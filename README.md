@@ -1,4 +1,4 @@
-# Audible Freebie Bot
+# Audiblastodon
 
 This bot finds new free audiobooks on Audible's "Free Listens" page and posts them to a Mastodon account and/or a Discord channel.
 
@@ -58,7 +58,7 @@ You need to configure at least one of the following: Mastodon or Discord.
     
     - Go to your Mastodon instance's settings: `https://<your-instance>/settings/applications`
     - Click "New Application".
-    - Give your application a name (e.g., "Audible Freebie Bot").
+    - Give your application a name (e.g., "Audiblastodon").
     - Make sure the `write:statuses` scope is checked.
     - Click "Submit".
     - You will see your access token on the next page. Copy it.
@@ -69,43 +69,48 @@ You need to configure at least one of the following: Mastodon or Discord.
 
     - In your Discord server, go to Server Settings > Integrations > Webhooks.
     - Click "New Webhook".
-    - Give the webhook a name (e.g., "Audible Freebie Bot").
+    - Give the webhook a name (e.g., "Audiblastodon").
     - Choose the channel you want the bot to post in.
     - Click "Copy Webhook URL".
 
 ## Usage
 
-You can run the bot from the command line. If you have configured the bot using a `.env` file, you can simply run:
+The bot has two main commands: `scrape` and `post`.
 
-```bash
-uv run main
+*   `scrape`: Scrapes Audible for new books and adds them to `books.csv`.
+*   `post`: Posts any unposted books from `books.csv`.
+
+Each command has a `--dry-run` option that will print the output to the console instead of performing the action.
+
+### Examples
+
+*   **To scrape for new books:**
+    ```bash
+    uv run main scrape
+    ```
+
+*   **To post new books:**
+    ```bash
+    uv run main post
+    ```
+
+*   **To do a dry run of the scrape:**
+    ```bash
+    uv run main scrape --dry-run
+    ```
+
+*   **To do a dry run of the post:**
+    ```bash
+    uv run main post --dry-run
+    ```
+
+## Running on a Schedule
+
+To run this bot automatically, you can set up cron jobs to execute the commands periodically. It is recommended to run the `scrape` command more frequently than the `post` command.
+
+For example, to scrape every hour and post every day at 9:00 AM:
+
 ```
-
-If you prefer to use command-line arguments, you can do so as follows:
-
-### Post to Mastodon
-```bash
-uv run main -- \
-    --mastodon-instance <your-mastodon-instance-url> \
-    --mastodon-token <your-access-token>
+0 * * * * cd /path/to/audiblastodon && uv run main scrape
+0 9 * * * cd /path/to/audiblastodon && uv run main post
 ```
-
-### Post to Discord
-```bash
-uv run main -- \
-    --discord-webhook <your-discord-webhook-url>
-```
-
-### Post to Both
-```bash
-uv run main -- \
-    --mastodon-instance <your-mastodon-instance-url> \
-    --mastodon-token <your-access-token> \
-    --discord-webhook <your-discord-webhook-url>
-```
-
-The bot will create a file named `posted_books.txt` in the current directory to keep track of the books it has already posted. You can change this with the `--posted-books-file` argument.
-
-### Running on a Schedule
-
-To run this bot automatically, you can set up a cron job or a similar scheduling mechanism to execute the command periodically (e.g., once a day).
