@@ -3,9 +3,8 @@ import os
 import csv
 import logging
 from datetime import datetime, timezone
-import requests
 from dotenv import load_dotenv
-from audiblastodon.scraper import scrape_free_books
+from audiblastodon.scraper import scrape_free_books, scrape_plus_books
 from audiblastodon.mastodon_poster import post_to_mastodon
 from audiblastodon.discord_poster import post_to_discord
 
@@ -22,15 +21,27 @@ def get_books(file_path):
 
 def write_books(file_path, books):
     with open(file_path, 'w') as f:
-        writer = csv.DictWriter(f, fieldnames=['title', 'author', 'link', 'scraped_at', 'posted_at'])
+        writer = csv.DictWriter(f, fieldnames=['title', 'author', 'link', 'source', 'scraped_at', 'posted_at'])
         writer.writeheader()
         writer.writerows(books)
 
 def scrape(args):
-    logging.info("Scraping for books...")
-    html_content = requests.get("https://www.audible.com/ep/FreeListens").text
-    scraped_books = scrape_free_books(html_content)
-    logging.info(f"Found {len(scraped_books)} books on the free listens page.")
+    logging.info("Beginning scrape...")
+    
+    logging.info("Scraping Free Listens page...")
+    free_books = scrape_free_books()
+    for book in free_books:
+        book['source'] = 'free'
+    logging.info(f"Found {len(free_books)} books on the free listens page.")
+
+    logging.info("Scraping Plus Catalog page...")
+    plus_books = scrape_plus_books()
+    for book in plus_books:
+        book['source'] = 'plus'
+    logging.info(f"Found {len(plus_books)} books on the plus catalog page.")
+
+    scraped_books = free_books + plus_books
+    logging.info(f"Total books scraped: {len(scraped_books)}.")
 
     existing_books = get_books(args.books_file)
     existing_links = {book['link'] for book in existing_books}
@@ -42,6 +53,7 @@ def scrape(args):
                 'title': book['title'],
                 'author': book['author'],
                 'link': book['url'],
+                'source': book['source'],
                 'scraped_at': datetime.now(timezone.utc).isoformat(),
                 'posted_at': ''
             })
@@ -50,11 +62,12 @@ def scrape(args):
 
     if args.dry_run:
         for book in new_books:
-            logging.info(f"[DRY RUN] Found new book: {book['title']}")
+            logging.info(f"[DRY RUN] New book: {book['title']} (Source: {book['source']})")
         return
 
     all_books = existing_books + new_books
     write_books(args.books_file, all_books)
+    logging.info(f"Wrote {len(new_books)} new books to {args.books_file}.")
 
 def post(args):
     logging.info("Posting new books...")
@@ -66,7 +79,11 @@ def post(args):
     logging.info(f"Found {len(unposted_books)} unposted books.")
 
     for book in unposted_books:
-        message = f"New free Audible book: {book['title']}\nby {book['author']}\n{book['link']}"
+        if book.get('source') == 'plus':
+            message = f"New Plus Catalog Audible release: {book['title']}\nby {book['author']}\n{book['link']}"
+        else:
+            message = f"New free Audible book: {book['title']}\nby {book['author']}\n{book['link']}"
+
         if args.dry_run:
             logging.info(f"[DRY RUN] {message}")
         else:
@@ -81,7 +98,7 @@ def post(args):
         write_books(args.books_file, books)
 
 def cli():
-    parser = argparse.ArgumentParser(description="Find new free Audible books and post them to Mastodon and/or Discord.")
+    parser = argparse.ArgumentParser(description="Find new Free On Audible books and post them to Mastodon and/or Discord.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Scrape command
