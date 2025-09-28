@@ -1,6 +1,7 @@
 import argparse
 import os
 import csv
+import logging
 from datetime import datetime, timezone
 import requests
 from dotenv import load_dotenv
@@ -9,6 +10,8 @@ from audiblastodon.mastodon_poster import post_to_mastodon
 from audiblastodon.discord_poster import post_to_discord
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 def get_books(file_path):
     if not os.path.exists(file_path):
@@ -24,10 +27,10 @@ def write_books(file_path, books):
         writer.writerows(books)
 
 def scrape(args):
-    print("Scraping for books...")
+    logging.info("Scraping for books...")
     html_content = requests.get("https://www.audible.com/ep/FreeListens").text
     scraped_books = scrape_free_books(html_content)
-    print(f"Found {len(scraped_books)} books on the free listens page.")
+    logging.info(f"Found {len(scraped_books)} books on the free listens page.")
 
     existing_books = get_books(args.books_file)
     existing_links = {book['link'] for book in existing_books}
@@ -43,31 +46,31 @@ def scrape(args):
                 'posted_at': ''
             })
 
-    print(f"Found {len(new_books)} new books.")
+    logging.info(f"Found {len(new_books)} new books.")
 
     if args.dry_run:
         for book in new_books:
-            print(f"[DRY RUN] Found new book: {book['title']}")
+            logging.info(f"[DRY RUN] Found new book: {book['title']}")
         return
 
     all_books = existing_books + new_books
     write_books(args.books_file, all_books)
 
 def post(args):
-    print("Posting new books...")
+    logging.info("Posting new books...")
     if not os.path.exists(args.books_file):
         raise FileNotFoundError(f"Books file not found: {args.books_file}. Run with `scrape` to create it.")
 
     books = get_books(args.books_file)
     unposted_books = [book for book in books if not book['posted_at']]
-    print(f"Found {len(unposted_books)} unposted books.")
+    logging.info(f"Found {len(unposted_books)} unposted books.")
 
     for book in unposted_books:
         message = f"New free Audible book: {book['title']}\nby {book['author']}\n{book['link']}"
         if args.dry_run:
-            print(f"[DRY RUN] {message}")
+            logging.info(f"[DRY RUN] {message}")
         else:
-            print(f"Posting new book: {book['title']}")
+            logging.info(f"Posting new book: {book['title']}")
             if args.mastodon_instance and args.mastodon_token:
                 post_to_mastodon(args.mastodon_instance, args.mastodon_token, message)
             if args.discord_webhook:
