@@ -27,29 +27,20 @@ def write_books(file_path, books):
 
 def scrape(args):
     logging.info("Beginning scrape...")
-    
     logging.info("Scraping Free Listens page...")
     free_books = scrape_free_books()
     for book in free_books:
         book['source'] = 'free'
     logging.info(f"Found {len(free_books)} books on the free listens page.")
 
-    logging.info("Scraping Plus Catalog page...")
-    plus_books = scrape_plus_books()
-    for book in plus_books:
-        book['source'] = 'plus'
-    logging.info(f"Found {len(plus_books)} books on the plus catalog page.")
-
-    scraped_books = free_books + plus_books
-    logging.info(f"Total books scraped: {len(scraped_books)}.")
-
+    # Process and save free books first
     existing_books = get_books(args.books_file)
     existing_links = {book['link'] for book in existing_books}
 
-    new_books = []
-    for book in scraped_books:
+    new_free_books = []
+    for book in free_books:
         if book['url'] not in existing_links:
-            new_books.append({
+            new_free_books.append({
                 'title': book['title'],
                 'author': book['author'],
                 'link': book['url'],
@@ -58,16 +49,50 @@ def scrape(args):
                 'posted_at': ''
             })
 
-    logging.info(f"Found {len(new_books)} new books.")
+    if new_free_books:
+        if args.dry_run:
+            for book in new_free_books:
+                logging.info(f"[DRY RUN] New free book: {book['title']}")
+        else:
+            all_books = existing_books + new_free_books
+            write_books(args.books_file, all_books)
+            logging.info(f"Wrote {len(new_free_books)} new free books to {args.books_file}.")
+            # Update existing books for plus processing
+            existing_books = all_books
+            existing_links = {book['link'] for book in existing_books}
 
-    if args.dry_run:
-        for book in new_books:
-            logging.info(f"[DRY RUN] New book: {book['title']} (Source: {book['source']})")
-        return
+    logging.info("Scraping Plus Catalog page...")
+    plus_books = scrape_plus_books(save_page=args.savepage)
+    for book in plus_books:
+        book['source'] = 'plus'
+    logging.info(f"Found {len(plus_books)} books on the plus catalog page.")
 
-    all_books = existing_books + new_books
-    write_books(args.books_file, all_books)
-    logging.info(f"Wrote {len(new_books)} new books to {args.books_file}.")
+    # Process plus books
+    new_plus_books = []
+    for book in plus_books:
+        if book['url'] not in existing_links:
+            new_plus_books.append({
+                'title': book['title'],
+                'author': book['author'],
+                'link': book['url'],
+                'source': book['source'],
+                'scraped_at': datetime.now(timezone.utc).isoformat(),
+                'posted_at': ''
+            })
+
+    logging.info(f"Found {len(new_plus_books)} new plus books.")
+
+    if new_plus_books:
+        if args.dry_run:
+            for book in new_plus_books:
+                logging.info(f"[DRY RUN] New plus book: {book['title']}")
+        else:
+            all_books = existing_books + new_plus_books
+            write_books(args.books_file, all_books)
+            logging.info(f"Wrote {len(new_plus_books)} new plus books to {args.books_file}.")
+
+    total_new = len(new_free_books) + len(new_plus_books)
+    logging.info(f"Total new books found: {total_new}")
 
 def post(args):
     logging.info("Posting new books...")
@@ -80,7 +105,7 @@ def post(args):
 
     for book in unposted_books:
         if book.get('source') == 'plus':
-            message = f"New Plus Catalog Audible release: {book['title']}\nby {book['author']}\n{book['link']}"
+            message = f"New Audible Plus release: {book['title']}\nby {book['author']}\n{book['link']}"
         else:
             message = f"New free Audible book: {book['title']}\nby {book['author']}\n{book['link']}"
 
@@ -105,6 +130,7 @@ def cli():
     scrape_parser = subparsers.add_parser("scrape", help="Scrape for new books.")
     scrape_parser.add_argument("--dry-run", action="store_true", help="Dry run - print to log instead of writing to file.")
     scrape_parser.add_argument("--books-file", default="books.csv", help="The file to store the book data in.")
+    scrape_parser.add_argument("--savepage", action="store_true", help="Save page HTML when scraping Plus catalog (for debugging).")
     scrape_parser.set_defaults(func=scrape)
 
     # Post command
