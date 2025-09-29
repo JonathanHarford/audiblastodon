@@ -28,6 +28,12 @@ This project uses `uv` for package management.
     uv pip install -e .
     ```
 
+5.  **Install Playwright browsers**
+
+    ```bash
+    uv run playwright install
+    ```
+    
 ## Configuration
 
 You can configure the bot in two ways:
