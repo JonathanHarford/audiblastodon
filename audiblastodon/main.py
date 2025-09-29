@@ -25,6 +25,15 @@ def write_books(file_path, books):
         writer.writeheader()
         writer.writerows(books)
 
+def append_book(file_path, book):
+    """Append a single book to the CSV file."""
+    file_exists = os.path.exists(file_path)
+    with open(file_path, 'a') as f:
+        writer = csv.DictWriter(f, fieldnames=['title', 'author', 'link', 'source', 'scraped_at', 'posted_at'])
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(book)
+
 def scrape(args):
     logging.info("Beginning scrape...")
     logging.info("Scraping Free Listens page...")
@@ -33,33 +42,33 @@ def scrape(args):
         book['source'] = 'free'
     logging.info(f"Found {len(free_books)} books on the free listens page.")
 
-    # Process and save free books first
+    # Process and save free books immediately
     existing_books = get_books(args.books_file)
     existing_links = {book['link'] for book in existing_books}
 
-    new_free_books = []
+    new_free_count = 0
     for book in free_books:
         if book['url'] not in existing_links:
-            new_free_books.append({
+            book_entry = {
                 'title': book['title'],
                 'author': book['author'],
                 'link': book['url'],
                 'source': book['source'],
                 'scraped_at': datetime.now(timezone.utc).isoformat(),
                 'posted_at': ''
-            })
+            }
 
-    if new_free_books:
-        if args.dry_run:
-            for book in new_free_books:
-                logging.info(f"[DRY RUN] New free book: {book['title']}")
-        else:
-            all_books = existing_books + new_free_books
-            write_books(args.books_file, all_books)
-            logging.info(f"Wrote {len(new_free_books)} new free books to {args.books_file}.")
-            # Update existing books for plus processing
-            existing_books = all_books
-            existing_links = {book['link'] for book in existing_books}
+            if args.dry_run:
+                logging.info(f"[DRY RUN] New free book: {book_entry['title']}")
+            else:
+                append_book(args.books_file, book_entry)
+                logging.info(f"Added free book: {book_entry['title']}")
+                existing_links.add(book['url'])
+
+            new_free_count += 1
+
+    if new_free_count > 0:
+        logging.info(f"Found {new_free_count} new free books.")
 
     logging.info("Scraping Plus Catalog page...")
     plus_books = scrape_plus_books(save_page=args.savepage)
@@ -67,31 +76,32 @@ def scrape(args):
         book['source'] = 'plus'
     logging.info(f"Found {len(plus_books)} books on the plus catalog page.")
 
-    # Process plus books
-    new_plus_books = []
+    # Process and save plus books immediately
+    new_plus_count = 0
     for book in plus_books:
         if book['url'] not in existing_links:
-            new_plus_books.append({
+            book_entry = {
                 'title': book['title'],
                 'author': book['author'],
                 'link': book['url'],
                 'source': book['source'],
                 'scraped_at': datetime.now(timezone.utc).isoformat(),
                 'posted_at': ''
-            })
+            }
 
-    logging.info(f"Found {len(new_plus_books)} new plus books.")
+            if args.dry_run:
+                logging.info(f"[DRY RUN] New plus book: {book_entry['title']}")
+            else:
+                append_book(args.books_file, book_entry)
+                logging.info(f"Added plus book: {book_entry['title']}")
+                existing_links.add(book['url'])
 
-    if new_plus_books:
-        if args.dry_run:
-            for book in new_plus_books:
-                logging.info(f"[DRY RUN] New plus book: {book['title']}")
-        else:
-            all_books = existing_books + new_plus_books
-            write_books(args.books_file, all_books)
-            logging.info(f"Wrote {len(new_plus_books)} new plus books to {args.books_file}.")
+            new_plus_count += 1
 
-    total_new = len(new_free_books) + len(new_plus_books)
+    if new_plus_count > 0:
+        logging.info(f"Found {new_plus_count} new plus books.")
+
+    total_new = new_free_count + new_plus_count
     logging.info(f"Total new books found: {total_new}")
 
 def post(args):
@@ -102,7 +112,11 @@ def post(args):
     books = get_books(args.books_file)
     unposted_books = [book for book in books if not book['posted_at']]
     logging.info(f"Found {len(unposted_books)} unposted books.")
-
+    if not (args.mastodon_instance and args.mastodon_token):
+        logging.info("No Mastodon creds supplied.")
+    if not args.discord_webhook:
+        logging.info("No Discord creds supplied.")
+    
     for book in unposted_books:
         if book.get('source') == 'plus':
             message = f"New Audible Plus release: {book['title']}\nby {book['author']}\n{book['link']}"
@@ -112,15 +126,23 @@ def post(args):
         if args.dry_run:
             logging.info(f"[DRY RUN] {message}")
         else:
-            logging.info(f"Posting new book: {book['title']}")
+
             if args.mastodon_instance and args.mastodon_token:
                 post_to_mastodon(args.mastodon_instance, args.mastodon_token, message)
             if args.discord_webhook:
                 post_to_discord(args.discord_webhook, message)
+    
+            # Update posted_at timestamp immediately
             book['posted_at'] = datetime.now(timezone.utc).isoformat()
 
-    if not args.dry_run:
-        write_books(args.books_file, books)
+            # Rewrite entire CSV with updated book
+            all_books = get_books(args.books_file)
+            for b in all_books:
+                if b['link'] == book['link']:
+                    b['posted_at'] = book['posted_at']
+                    break
+            write_books(args.books_file, all_books)
+            logging.info(f"Updated posted_at for: {book['title']}")
 
 def cli():
     parser = argparse.ArgumentParser(description="Find new Free On Audible books and post them to Mastodon and/or Discord.")
