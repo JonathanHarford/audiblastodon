@@ -1,6 +1,6 @@
 # Audiblastodon
 
-![audiblastodon](audiblastodon.jpg)
+![audiblastodon](audiblastodon.png)
 
 This bot finds new audiobooks on Audible's "Free Listens" and "Audible Plus" (i.e. free with subscription) pages and posts them to a Mastodon account and/or a Discord channel.
 
