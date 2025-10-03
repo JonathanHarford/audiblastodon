@@ -130,7 +130,7 @@ def scrape_plus_books(save_page=False):
         page = browser.new_page()
         try:
             logging.info("Navigating to Audible Plus member benefit page...")
-            page.goto("https://www.audible.com/ep/audible-plus-member-benefit", timeout=10000)
+            page.goto("https://www.audible.com/ep/audible-plus-member-benefit", timeout=60000, wait_until="domcontentloaded")
 
             logging.info("Checking for cookie banner...")
             try:
