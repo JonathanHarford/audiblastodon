@@ -54,7 +54,9 @@ def _parse_free_books_from_html(html_content):
             author_link = author_element.find('a') if author_element else None
             if link:
                 title = link.text.strip()
-                url = f"https://www.audible.com{link['href']}"
+                # Strip query parameters from URL to avoid duplicates
+                href = link['href'].split('?')[0]
+                url = f"https://www.audible.com{href}"
                 author = author_link.text.strip() if author_link else ""
                 books.append({'title': title, 'author': author, 'url': url})
 
@@ -90,8 +92,10 @@ def _parse_plus_books_from_html(html_content):
             continue
 
         title = title_link.get_text(strip=True)
-        url = f"https://www.audible.com{title_link['href']}"
-        logging.info(f"Item {idx + 1}: Title: '{title}', URL: {title_link['href']}")
+        # Strip query parameters from URL to avoid duplicates
+        href = title_link['href'].split('?')[0]
+        url = f"https://www.audible.com{href}"
+        logging.info(f"Item {idx + 1}: Title: '{title}', URL: {href}")
 
         # Find author from the authorLabel list item
         author = ""
